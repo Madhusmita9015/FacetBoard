@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FacetBoard — Production vs Target</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0E1015;
+    --panel:#161922;
+    --panel-2:#1C202B;
+    --line:#2A2F3B;
+    --text:#EDEEF1;
+    --muted:#8C92A3;
+    --ice:#7FE9DE;
+    --ice-dim:#3E7A75;
+    --gold:#E8B84B;
+    --amber:#E8734B;
+    --green:#6FCF97;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
+  ::selection{background:var(--ice-dim);}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  #app{max-width:1180px;margin:0 auto;padding:32px 20px 80px;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand svg{width:30px;height:30px;flex-shrink:0;}
+  .brand-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;letter-spacing:0.2px;}
+  .brand-sub{color:var(--muted);font-size:12.5px;margin-top:1px;}
+  .topbar-actions{display:flex;gap:10px;}
+  .btn{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:9px 16px;border-radius:9px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;
+    font-weight:500;transition:border-color .15s, background .15s;
+  }
+  .btn:hover{border-color:var(--ice-dim);background:#1E2330;}
+  .btn.primary{background:var(--ice);color:#0E1015;border-color:var(--ice);font-weight:600;}
+  .btn.primary:hover{background:#95F0E6;}
+
+  /* ---------- Upload screen ---------- */
+  #uploadScreen{display:flex;flex-direction:column;align-items:center;padding-top:8vh;text-align:center;}
+  .hero-mark{width:64px;height:64px;margin-bottom:18px;}
+  #uploadScreen h1{font-family:'Space Grotesk',sans-serif;font-size:32px;margin:0 0 8px;font-weight:700;}
+  #uploadScreen p.lead{color:var(--muted);font-size:15px;max-width:520px;margin:0 0 40px;line-height:1.6;}
+  .dropzones{display:flex;gap:20px;width:100%;max-width:760px;flex-wrap:wrap;justify-content:center;}
+  .dropzone{
+    flex:1;min-width:280px;background:var(--panel);border:1.5px dashed var(--line);border-radius:var(--radius);
+    padding:28px 20px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;
+  }
+  .dropzone:hover, .dropzone.dragover{border-color:var(--ice);background:#171B26;}
+  .dropzone.loaded{border-style:solid;border-color:var(--green);}
+  .dz-icon{width:34px;height:34px;margin-bottom:12px;color:var(--muted);}
+  .dropzone.loaded .dz-icon{color:var(--green);}
+  .dz-title{font-weight:600;font-size:15px;margin-bottom:4px;}
+  .dz-hint{color:var(--muted);font-size:12.5px;line-height:1.5;}
+  .dz-filename{margin-top:10px;font-size:12px;color:var(--ice);font-family:'JetBrains Mono',monospace;word-break:break-all;}
+  .dropzone input{display:none;}
+  .dz-filelist{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+  .file-chip{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:#12151D;border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+  }
+  .file-chip .fname{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ice);word-break:break-all;}
+  .file-chip .fmeta{font-size:10.5px;color:var(--muted);white-space:nowrap;margin-left:8px;}
+  .file-chip .fremove{
+    background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex-shrink:0;
+  }
+  .file-chip .fremove:hover{color:var(--amber);}
+  .filesbar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;
+  }
+  .filesbar-files{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .filesbar-label{color:var(--muted);font-size:11.5px;margin-right:4px;}
+  .filesbar .file-chip{padding:5px 9px;}
+  #addProdInput{display:none;}
+
+  /* ---------- Sections generic ---------- */
+  .section{margin-bottom:32px;}
+  .section-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:var(--text);
+    text-transform:uppercase;letter-spacing:0.6px;margin:0 0 14px;display:flex;align-items:center;gap:8px;}
+  .section-title .tag{background:var(--panel-2);color:var(--muted);font-size:10.5px;padding:2px 8px;border-radius:20px;letter-spacing:0.3px;text-transform:none;font-family:'Inter',sans-serif;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;}
+
+  /* ---------- Hero gauge ---------- */
+  .hero-row{display:flex;gap:22px;align-items:center;flex-wrap:wrap;}
+  .gauge-wrap{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+  .gauge-wrap svg{width:150px;height:170px;}
+  .gauge-pct{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;margin-top:6px;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;flex:1;}
+  .kpi{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:16px 16px;}
+  .kpi .val{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;line-height:1.1;}
+  .kpi .lbl{color:var(--muted);font-size:11.5px;margin-top:6px;letter-spacing:0.2px;}
+  .kpi.ice .val{color:var(--ice);}
+  .kpi.gold .val{color:var(--gold);}
+  .kpi.amber .val{color:var(--amber);}
+  .kpi.green .val{color:var(--green);}
+
+  /* ---------- Priority cards ---------- */
+  .priority-scroll{display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;}
+  .priority-card{
+    min-width:220px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;
+    padding:16px 16px 14px;flex-shrink:0;border-left:3px solid var(--amber);
+  }
+  .priority-card .shape{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14.5px;}
+  .priority-card .size{color:var(--muted);font-size:12px;margin-top:1px;font-family:'JetBrains Mono',monospace;}
+  .priority-card .remaining{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--amber);margin:10px 0 2px;}
+  .priority-card .remaining-lbl{color:var(--muted);font-size:11px;margin-bottom:12px;}
+  .priority-card .specs{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;}
+  .priority-card .specs b{color:var(--text);font-family:'JetBrains Mono',monospace;font-weight:500;}
+  .priority-empty{color:var(--muted);font-size:13.5px;padding:20px;text-align:center;width:100%;}
+
+  /* ---------- Table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;color:var(--muted);font-weight:600;font-size:11px;letter-spacing:0.4px;text-transform:uppercase;
+    padding:0 10px 10px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap;
+  }
+  thead th:hover{color:var(--ice);}
+  thead th.active{color:var(--ice);}
+  tbody tr.rowmain{border-bottom:1px solid var(--line);cursor:pointer;}
+  tbody tr.rowmain:hover{background:var(--panel-2);}
+  tbody td{padding:11px 10px;vertical-align:middle;}
+  td.num, th.num{font-family:'JetBrains Mono',monospace;text-align:right;}
+  .shape-cell{font-weight:600;font-family:'Space Grotesk',sans-serif;}
+  .size-cell{color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .bar-track{background:#262B37;border-radius:6px;height:7px;width:100%;overflow:hidden;margin-top:5px;}
+  .bar-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--ice-dim),var(--ice));}
+  .bar-fill.done{background:var(--green);}
+  .pct-txt{font-size:10.5px;color:var(--muted);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;letter-spacing:0.2px;}
+  .badge.done{background:rgba(111,207,151,0.15);color:var(--green);}
+  .badge.progress{background:rgba(127,233,222,0.15);color:var(--ice);}
+  .badge.notstarted{background:rgba(232,115,75,0.15);color:var(--amber);}
+  .detail-row td{background:#12151D;padding:0 10px 16px;}
+  .detail-inner{border-top:1px dashed var(--line);padding-top:12px;margin-top:2px;}
+  .detail-inner table{font-size:12px;}
+  .detail-inner thead th{padding-bottom:6px;font-size:10px;}
+  .detail-inner tbody td{padding:6px 10px;color:var(--muted);}
+  .chev{display:inline-block;transition:transform .15s;color:var(--muted);margin-right:4px;font-size:11px;}
+  .rowmain.open .chev{transform:rotate(90deg);}
+  .search-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+  .search-bar input{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:9px 14px;border-radius:9px;
+    font-size:13px;font-family:'Inter',sans-serif;width:240px;
+  }
+  .search-bar input::placeholder{color:var(--muted);}
+  .legend{color:var(--muted);font-size:11.5px;}
+
+  .empty-note{color:var(--muted);font-size:13px;text-align:center;padding:26px;}
+  .footnote{color:var(--muted);font-size:11.5px;line-height:1.7;margin-top:6px;}
+  .footnote b{color:var(--text);}
+
+  @media (max-width:760px){
+    .kpi-grid{grid-template-columns:repeat(2,1fr);}
+    .hero-row{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 8L12 2L20 8L12 22L4 8Z" stroke="#7FE9DE" stroke-width="1.4" stroke-linejoin="round"/><path d="M4 8H20M8.5 8L12 2L15.5 8M8.5 8L12 22M15.5 8L12 22" stroke="#7FE9DE" stroke-width="1" opacity="0.55"/></svg>
+      <div>
+        <div class="brand-name">FacetBoard</div>
+        <div class="brand-sub">Production vs. target tracker</div>
+      </div>
+    </div>
+    <div class="topbar-actions" id="topActions" style="display:none;">
+      <button class="btn primary" onclick="downloadPiecesCSV()">Download CSV</button>
+      <button class="btn" onclick="resetAll()">Upload new files</button>
+    </div>
+  </div>
+
+  <!-- UPLOAD SCREEN -->
+  <div id="uploadScreen">
+    <svg class="hero-mark" viewBox="0 0 24 24" fill="none"><path d="M4 8L12 2L20 8L12 22L4 8Z" stroke="#7FE9DE" stroke-width="1.2" stroke-linejoin="round"/><path d="M4 8H20M8.5 8L12 2L15.5 8M8.5 8L12 22M15.5 8L12 22" stroke="#7FE9DE" stroke-width="0.8" opacity="0.5"/></svg>
+    <h1>What's left to cut?</h1>
+    <p class="lead">Upload one or more production reports (e.g. several days' sheets) and the target order sheet. FacetBoard matches the highlighted (selected) pieces against what's ordered, and tells you exactly what's still owed — by shape, size and quantity.</p>
+
+    <div class="dropzones">
+      <label class="dropzone" id="dzProd">
+        <input type="file" id="fileProd" accept=".xlsx,.xls" multiple>
+        <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
+        <div class="dz-title">1. Production report(s)</div>
+        <div class="dz-hint">One or more computer-generated sheets with plan rows and yellow-highlighted selected cuts. Select multiple files, or drop them again later to add more.</div>
+        <div class="dz-filelist" id="dzProdList"></div>
+      </label>
+      <label class="dropzone" id="dzTarget">
+        <input type="file" id="fileTarget" accept=".xlsx,.xls">
+        <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
+        <div class="dz-title">2. Target order sheet</div>
+        <div class="dz-hint">The sheet listing required Shape, PCS, L×W, Ratio, Height and Weight.</div>
+        <div class="dz-filename" id="dzTargetName"></div>
+      </label>
+    </div>
+    <div id="uploadError" style="color:#E8734B;font-size:13px;margin-top:18px;max-width:600px;"></div>
+
+    <div style="margin-top:26px;padding:16px 20px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);max-width:600px;font-size:13px;color:var(--muted);">
+      Just want to see how it works? Grab the sample files and drop them in above:
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+        <a href="sample-files/sample-production-report.xlsx" download style="color:var(--ice);text-decoration:none;border:1px solid var(--ice-dim);padding:7px 12px;border-radius:8px;font-weight:500;">↓ Sample production report</a>
+        <a href="sample-files/sample-target-order-sheet.xlsx" download style="color:var(--ice);text-decoration:none;border:1px solid var(--ice-dim);padding:7px 12px;border-radius:8px;font-weight:500;">↓ Sample target order sheet</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" style="display:none;">
+
+    <div class="filesbar">
+      <div class="filesbar-files" id="filesbarFiles"></div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <input type="file" id="addProdInput" accept=".xlsx,.xls" multiple>
+        <button class="btn" onclick="document.getElementById('addProdInput').click()">+ Add production file(s)</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="panel hero-row">
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 150 170">
+            <defs>
+              <clipPath id="gemClip">
+                <path id="gemClipPath" d="M15 60 L75 10 L135 60 L75 160 Z"/>
+              </clipPath>
+            </defs>
+            <path d="M15 60 L75 10 L135 60 L75 160 Z" fill="none" stroke="#2A2F3B" stroke-width="2"/>
+            <path d="M15 60 H135 M45 60 L75 10 L105 60 M45 60 L75 160 M105 60 L75 160" stroke="#2A2F3B" stroke-width="1"/>
+            <g clip-path="url(#gemClip)">
+              <rect id="gemFill" x="0" y="170" width="150" height="0" fill="#7FE9DE"/>
+            </g>
+            <path d="M15 60 L75 10 L135 60 L75 160 Z" fill="none" stroke="#7FE9DE" stroke-width="2"/>
+            <path d="M15 60 H135 M45 60 L75 10 L105 60 M45 60 L75 160 M105 60 L75 160" stroke="#7FE9DE" stroke-width="1" opacity="0.5"/>
+          </svg>
+          <div class="gauge-pct" id="gaugePct">0% complete</div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi ice"><div class="val" id="kpiTarget">0</div><div class="lbl">Total pieces ordered</div></div>
+          <div class="kpi green"><div class="val" id="kpiDone">0</div><div class="lbl">Pieces produced &amp; matched</div></div>
+          <div class="kpi amber"><div class="val" id="kpiLeft">0</div><div class="lbl">Pieces still owed</div></div>
+          <div class="kpi gold"><div class="val" id="kpiValue">$0</div><div class="lbl">Est. value produced</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Cut next <span class="tag">sorted by most owed</span></div>
+      <div class="priority-scroll" id="priorityScroll"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Shape &amp; size breakdown</div>
+      <div class="panel">
+        <div class="search-bar">
+          <input type="text" id="searchBox" placeholder="Filter by shape, e.g. pear">
+          <div class="legend">Click a row for piece-level detail</div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="mainTable">
+            <thead>
+              <tr>
+                <th data-key="shape">Shape</th>
+                <th data-key="size">Size (L×W mm)</th>
+                <th class="num" data-key="target">Target</th>
+                <th class="num" data-key="done">Done</th>
+                <th class="num" data-key="left" class="active">Left</th>
+                <th>Progress</th>
+                <th class="num" data-key="avgwt">Avg wt (ct)</th>
+                <th class="num" data-key="targetwt">Target wt (ct)</th>
+                <th class="num" data-key="height">Height %</th>
+                <th class="num" data-key="value">Value done</th>
+              </tr>
+            </thead>
+            <tbody id="mainTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-note" id="mainEmptyNote" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Extra &amp; by-product production <span class="tag">not on the target sheet</span></div>
+      <div class="panel">
+        <p class="footnote" style="margin-top:0;">These are highlighted/selected pieces that were produced but don't match a shape+size on your target sheet — round melee from sawing, sample cuts, or off-spec shapes. Worth tracking as bonus yield.</p>
+        <div style="overflow-x:auto;">
+          <table id="extraTable">
+            <thead><tr><th>Shape</th><th>Size (approx.)</th><th class="num">Pieces</th><th class="num">Total wt (ct)</th><th class="num">Value</th></tr></thead>
+            <tbody id="extraTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-note" id="extraEmptyNote" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="panel footnote">
+        <b>How this is calculated:</b> "Done" counts rows in the production sheet that are highlighted yellow (the selected/executed cut plan). Each piece is matched to a target row by shape family and its W:/L: dimensions; where a shape has several target variants at the same size (e.g. baguette height options), the closest Height % is used as the tiebreaker. Rows that aren't highlighted are treated as alternative plans that weren't cut, and are ignored. If a matched count or shape looks off, it's worth a manual spot-check — production sheet layouts vary.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="app-footer" style="text-align:center;margin-top:40px;line-height:2;">
+    <div style="color:var(--ice);font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.3px;">build by Madhusmita</div>
+    <div style="color:var(--gold);font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12.5px;letter-spacing:0.5px;">404: low-key iconic</div>
+  </div>
+</div>
+
+<script>
+let state = { targets: [], extras: {}, prodFiles: [], targetFile: null, allPieces: [] };
+
+const dzProd = document.getElementById('dzProd');
+const dzTarget = document.getElementById('dzTarget');
+const fileProd = document.getElementById('fileProd');
+const fileTarget = document.getElementById('fileTarget');
+const addProdInput = document.getElementById('addProdInput');
+
+fileProd.addEventListener('change', e => handleProdFiles(e.target.files));
+fileTarget.addEventListener('change', e => handleTargetFile(e.target.files[0]));
+addProdInput.addEventListener('change', e => handleProdFiles(e.target.files));
+
+[dzProd, dzTarget].forEach((dz, i) => {
+  const kind = i === 0 ? 'prod' : 'target';
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    if (kind === 'prod') handleProdFiles(e.dataTransfer.files);
+    else if (e.dataTransfer.files[0]) handleTargetFile(e.dataTransfer.files[0]);
+  });
+});
+
+function readWorkbook(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellStyles: true, cellNF: false });
+        resolve(wb);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('File could not be read'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleProdFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  document.getElementById('uploadError').textContent = '';
+  for (const file of files) {
+    if (state.prodFiles.some(f => f.name === file.name)) continue; // skip duplicates by name
+    try {
+      const wb = await readWorkbook(file);
+      state.prodFiles.push({ name: file.name, wb });
+    } catch (err) {
+      document.getElementById('uploadError').textContent = 'Could not read "' + file.name + '". Make sure it is a valid .xlsx file. (' + err.message + ')';
+    }
+  }
+  renderFileChips();
+  if (state.prodFiles.length) dzProd.classList.add('loaded');
+  if (state.prodFiles.length && state.targetFile) buildDashboard();
+}
+
+async function handleTargetFile(file) {
+  if (!file) return;
+  document.getElementById('uploadError').textContent = '';
+  try {
+    const wb = await readWorkbook(file);
+    state.targetFile = { name: file.name, wb };
+    dzTarget.classList.add('loaded');
+    document.getElementById('dzTargetName').textContent = file.name;
+    if (state.prodFiles.length && state.targetFile) buildDashboard();
+  } catch (err) {
+    document.getElementById('uploadError').textContent = 'Could not read "' + file.name + '". Make sure it is a valid .xlsx file. (' + err.message + ')';
+  }
+}
+
+function removeProdFile(name) {
+  state.prodFiles = state.prodFiles.filter(f => f.name !== name);
+  renderFileChips();
+  if (state.prodFiles.length === 0) dzProd.classList.remove('loaded');
+  if (state.prodFiles.length && state.targetFile) {
+    buildDashboard();
+  } else {
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('uploadScreen').style.display = 'flex';
+    document.getElementById('topActions').style.display = 'none';
+  }
+}
+
+function fileChipHtml(name, removable) {
+  return `<div class="file-chip"><span class="fname">${name}</span>${removable ? `<button class="fremove" title="Remove" onclick="removeProdFile('${name.replace(/'/g,"\\'")}')">&times;</button>` : ''}</div>`;
+}
+
+function renderFileChips() {
+  document.getElementById('dzProdList').innerHTML = state.prodFiles.map(f => fileChipHtml(f.name, true)).join('');
+  const bar = document.getElementById('filesbarFiles');
+  if (bar) {
+    const label = '<span class="filesbar-label">' + state.prodFiles.length + ' production file' + (state.prodFiles.length===1?'':'s') + ' loaded:</span>';
+    const counts = {};
+    (state.perFileCounts || []).forEach(c => counts[c.name] = c.count);
+    bar.innerHTML = label + state.prodFiles.map(f => {
+      const c = counts[f.name];
+      const meta = (c !== undefined) ? `<span class="fmeta">${c} selected</span>` : '';
+      return `<div class="file-chip"><span class="fname">${f.name}</span>${meta}<button class="fremove" title="Remove" onclick="removeProdFile('${f.name.replace(/'/g,"\\'")}')">&times;</button></div>`;
+    }).join('');
+  }
+}
+
+function csvField(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadPiecesCSV() {
+  const pieces = state.allPieces || [];
+  if (!pieces.length) {
+    document.getElementById('uploadError').textContent = 'No highlighted pieces to export yet.';
+    return;
+  }
+  const header = ['D', 'E', 'I', 'J', 'K', 'L', 'M', 'O', 'U'];
+  const rows = [header.join(',')];
+  pieces.forEach(p => {
+    const row = [p.colD, p.colE, p.colI, p.colJ, p.colK, p.colL, p.colM, p.colO, p.colU].map(csvField);
+    rows.push(row.join(','));
+  });
+  const csv = rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = 'facetboard_pieces_' + stamp + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function resetAll() {
+  state = { targets: [], extras: {}, prodFiles: [], targetFile: null, allPieces: [] };
+  dzProd.classList.remove('loaded');
+  dzTarget.classList.remove('loaded');
+  document.getElementById('dzProdList').innerHTML = '';
+  document.getElementById('dzTargetName').textContent = '';
+  fileProd.value = ''; fileTarget.value = ''; addProdInput.value = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('uploadScreen').style.display = 'flex';
+  document.getElementById('topActions').style.display = 'none';
+}
+
+// ---------- helpers ----------
+function normShape(str) {
+  if (!str) return null;
+  const s = String(str).toLowerCase();
+  if (s.includes('mqs') || s.includes('marquise')) return 'Marquise';
+  if (s.includes('pear')) return 'Pear';
+  if (s.includes('bug') || s.includes('baguette')) return 'Baguette';
+  if (s.includes('rose')) return 'Rose Cut';
+  if (s.includes('half') || s.includes('moon')) return 'Half Moon';
+  if (s.includes('trapez')) return 'Trapezoid';
+  if (s.includes('round')) return 'Round';
+  if (s.includes('emerald')) return 'Emerald';
+  if (s.includes('heart')) return 'Heart';
+  if (s.includes('oval')) return 'Oval';
+  if (s.includes('triarc')) return 'Triarc';
+  if (s.includes('triangle')) return 'Triangle';
+  if (s.includes('taper')) return 'Taper';
+  // fallback: strip trailing digits/dashes, title-case
+  let clean = String(str).replace(/[\d\-.]+$/g, '').trim();
+  if (!clean) clean = String(str).trim();
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
+function parseNum(str) {
+  if (str === null || str === undefined) return null;
+  if (typeof str === 'number') return str;
+  const m = String(str).match(/[\d]+\.?[\d]*/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+function isYellow(cell) {
+  if (!cell || !cell.s) return false;
+  const s = cell.s;
+  const fg = s.fgColor && (s.fgColor.rgb || '');
+  const bg = s.bgColor && (s.bgColor.rgb || '');
+  const yellowRe = /^(FF)?FFFF00$/i;
+  return (s.patternType === 'solid') && (yellowRe.test(fg || '') || yellowRe.test(bg || ''));
+}
+
+function fmtNum(n, d) { return (n === null || n === undefined || isNaN(n)) ? '—' : n.toFixed(d === undefined ? 2 : d); }
+function fmtInt(n) { return (n === null || n === undefined || isNaN(n)) ? '0' : Math.round(n).toLocaleString(); }
+function fmtMoney(n) { return '$' + (n ? n.toFixed(0) : '0'); }
+
+// ---------- parse target sheet ----------
+function parseTargets(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+  let headerIdx = -1, colMap = {};
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const row = rows[i] || [];
+    for (let j = 0; j < row.length; j++) {
+      if (row[j] && String(row[j]).trim().toUpperCase() === 'SHAPE') { headerIdx = i; break; }
+    }
+    if (headerIdx >= 0) break;
+  }
+  if (headerIdx === -1) return [];
+  const header = rows[headerIdx];
+  header.forEach((h, j) => {
+    if (!h) return;
+    const u = String(h).trim().toUpperCase();
+    if (u === 'SHAPE') colMap.shape = j;
+    else if (u === 'PCS') colMap.pcs = j;
+    else if (u.includes('L') && u.includes('W') && u.includes('MM')) colMap.lw = j;
+    else if (u.includes('RATIO')) colMap.ratio = j;
+    else if (u.includes('HEIGHT') && u.includes('MM')) colMap.heightmm = j;
+    else if (u.includes('HEIGHT') && u.includes('%')) colMap.heightpct = j;
+    else if (u.includes('SINGLE')) colMap.singlewt = j;
+    else if (u.includes('TOTAL')) colMap.totalwt = j;
+  });
+
+  const targets = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const shapeRaw = colMap.shape !== undefined ? row[colMap.shape] : null;
+    if (!shapeRaw) continue;
+    const lwRaw = colMap.lw !== undefined ? row[colMap.lw] : null;
+    let length = null, width = null;
+    if (lwRaw) {
+      const nums = String(lwRaw).match(/[\d.]+/g);
+      if (nums && nums.length >= 2) { length = parseFloat(nums[0]); width = parseFloat(nums[1]); }
+    }
+    targets.push({
+      id: targets.length,
+      shapeRaw: String(shapeRaw).trim(),
+      shapeNorm: normShape(shapeRaw),
+      pcs: parseNum(colMap.pcs !== undefined ? row[colMap.pcs] : null) || 0,
+      length, width,
+      ratio: parseNum(colMap.ratio !== undefined ? row[colMap.ratio] : null),
+      heightMm: parseNum(colMap.heightmm !== undefined ? row[colMap.heightmm] : null),
+      heightPct: parseNum(colMap.heightpct !== undefined ? row[colMap.heightpct] : null),
+      singleWt: parseNum(colMap.singlewt !== undefined ? row[colMap.singlewt] : null),
+      totalWt: parseNum(colMap.totalwt !== undefined ? row[colMap.totalwt] : null),
+      producedCount: 0, weights: [], heightPcts: [], prices: [], pieces: []
+    });
+  }
+  return targets;
+}
+
+// ---------- parse production sheet ----------
+function parseProduction(wb, targets, sourceFile, extras, allPieces) {
+  const sheetName = wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const ref = sheet['!ref'];
+  if (!ref) return { totalYellowRows: 0 };
+  const range = XLSX.utils.decode_range(ref);
+  let lastRoughId = null;
+  let lastInitialWeight = null;
+  let totalYellowRows = 0;
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const getCell = (c) => sheet[XLSX.utils.encode_cell({ r, c })];
+    const cellA = getCell(0);
+    if (cellA && cellA.v) lastRoughId = String(cellA.v);
+    const cellB = getCell(1); // B - rough/initial weight, carries down until a new rough starts
+    if (cellA && cellA.v && cellB && cellB.v !== undefined && cellB.v !== null) {
+      lastInitialWeight = parseNum(cellB.v);
+    }
+
+    const shapeCell = getCell(4); // col E
+    const pieceIdxCell = getCell(5); // col F
+    if (!shapeCell || shapeCell.v === undefined || shapeCell.v === null || String(shapeCell.v).trim() === '') continue;
+    const shapeRaw = String(shapeCell.v).trim();
+    if (pieceIdxCell === undefined || pieceIdxCell.v === undefined || pieceIdxCell.v === null || isNaN(parseFloat(pieceIdxCell.v))) continue;
+
+    // check row highlighted yellow - scan a few key cells in the row
+    let rowYellow = false;
+    for (const c of [0,1,2,3,4,7,8,11,12]) {
+      if (isYellow(getCell(c))) { rowYellow = true; break; }
+    }
+    if (!rowYellow) continue;
+    totalYellowRows++;
+
+    const shapeCodeCell = getCell(7); // H
+    const singleWtCell = getCell(8); // I
+    const clarityCell = getCell(9); // J
+    const colorCell = getCell(10); // K
+    const widthCell = getCell(11); // L  "W:x.xx"
+    const lengthCell = getCell(12); // M  "L:x.xx"
+    const ratioCell = getCell(13); // N
+    const heightPctCell = getCell(14); // O
+    const priceCell = getCell(20); // U
+
+    let width = widthCell ? parseNum(widthCell.v) : null;
+    let length = lengthCell ? parseNum(lengthCell.v) : null;
+    if ((!width || !length)) {
+      const nums = shapeRaw.match(/[\d]+\.?[\d]*/g);
+      if (nums && nums.length >= 2) { length = length || parseFloat(nums[0]); width = width || parseFloat(nums[1]); }
+    }
+    const heightPct = heightPctCell ? parseNum(heightPctCell.v) : null;
+    const pieceWt = singleWtCell ? parseNum(singleWtCell.v) : null;
+    const price = priceCell ? parseNum(priceCell.v) : null;
+    const shapeNorm = normShape(shapeRaw) || normShape(shapeCodeCell ? shapeCodeCell.v : shapeRaw);
+
+    // find matching target
+    const candidates = targets.filter(t => t.shapeNorm === shapeNorm && t.length !== null && t.width !== null);
+    let best = null, bestScore = Infinity;
+    if (length !== null && width !== null) {
+      candidates.forEach(t => {
+        const score = Math.abs(t.length - length) + Math.abs(t.width - width);
+        if (score < bestScore) { bestScore = score; best = t; }
+      });
+    }
+    const TOL = 0.4;
+    if (best && bestScore <= TOL) {
+      // tiebreak among ties on height% if multiple candidates within tol
+      const tied = candidates.filter(t => Math.abs(t.length - length) + Math.abs(t.width - width) <= TOL);
+      if (tied.length > 1 && heightPct !== null) {
+        tied.sort((a,b) => Math.abs((a.heightPct||0)-heightPct) - Math.abs((b.heightPct||0)-heightPct));
+        best = tied[0];
+      }
+      best.producedCount++;
+      if (pieceWt !== null) best.weights.push(pieceWt);
+      if (heightPct !== null) best.heightPcts.push(heightPct);
+      if (price !== null) best.prices.push(price);
+      const colD = getCell(3);
+      const pieceRecord = {
+        roughId: lastRoughId, initialWeight: lastInitialWeight,
+        clarity: clarityCell ? clarityCell.v : '', color: colorCell ? colorCell.v : '',
+        shape: (shapeCodeCell && shapeCodeCell.v) ? shapeCodeCell.v : shapeRaw,
+        weight: pieceWt, price: price, length: length, width: width, height: best.heightMm,
+        sourceFile: sourceFile,
+        // raw D,E,I,J,K,L,M,O,U column values, bare numbers (no ct/$/W:/L: units)
+        colD: colD ? parseNum(colD.v) : null,
+        colE: shapeCell ? String(shapeCell.v).trim() : '',
+        colI: singleWtCell ? parseNum(singleWtCell.v) : null,
+        colJ: clarityCell ? clarityCell.v : '',
+        colK: colorCell ? colorCell.v : '',
+        colL: widthCell ? parseNum(widthCell.v) : null,
+        colM: lengthCell ? parseNum(lengthCell.v) : null,
+        colO: heightPctCell ? parseNum(heightPctCell.v) : null,
+        colU: priceCell ? parseNum(priceCell.v) : null
+      };
+      best.pieces.push(pieceRecord);
+      if (allPieces) allPieces.push(pieceRecord);
+    } else {
+      const keyL = length !== null ? length.toFixed(2) : '?';
+      const keyW = width !== null ? width.toFixed(2) : '?';
+      const key = shapeNorm + '|' + keyL + 'x' + keyW;
+      if (!extras[key]) extras[key] = { shape: shapeNorm, length, width, count: 0, totalWt: 0, totalValue: 0 };
+      extras[key].count++;
+      extras[key].totalWt += (pieceWt || 0);
+      extras[key].totalValue += (price || 0);
+    }
+  }
+  return { totalYellowRows };
+}
+
+function buildDashboard() {
+  document.getElementById('uploadError').textContent = '';
+  const targets = parseTargets(state.targetFile.wb);
+  if (targets.length === 0) {
+    document.getElementById('uploadError').textContent = 'Could not find a "SHAPE" header row in the target sheet. Please check the file has columns like Shape, PCS, L x W (mm), Ratio, Height mm, Height %, Single Piece Wt, Total Wt.';
+    return;
+  }
+  const extras = {};
+  const allPieces = [];
+  let totalYellowRows = 0;
+  const perFileCounts = [];
+  state.prodFiles.forEach(f => {
+    const { totalYellowRows: n } = parseProduction(f.wb, targets, f.name, extras, allPieces);
+    totalYellowRows += n;
+    perFileCounts.push({ name: f.name, count: n });
+  });
+  if (totalYellowRows === 0) {
+    document.getElementById('uploadError').textContent = 'No yellow-highlighted rows were found in the production file(s), so nothing could be counted as produced. Double check the files — highlighting may not have carried over on save.';
+    return;
+  }
+  state.targets = targets;
+  state.extras = extras;
+  state.perFileCounts = perFileCounts;
+  state.allPieces = allPieces;
+
+  document.getElementById('uploadScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('topActions').style.display = 'flex';
+  renderFileChips();
+
+  renderAll();
+}
+
+function renderAll() {
+  const targets = state.targets;
+  const totalTarget = targets.reduce((s,t) => s + t.pcs, 0);
+  const totalDone = targets.reduce((s,t) => s + Math.min(t.producedCount, t.pcs), 0);
+  const totalDoneRaw = targets.reduce((s,t) => s + t.producedCount, 0);
+  const totalLeft = targets.reduce((s,t) => s + Math.max(0, t.pcs - t.producedCount), 0);
+  const totalValue = targets.reduce((s,t) => s + t.prices.reduce((a,b)=>a+b,0), 0);
+  const pct = totalTarget > 0 ? Math.min(100, (totalDoneRaw/totalTarget)*100) : 0;
+
+  document.getElementById('kpiTarget').textContent = fmtInt(totalTarget);
+  document.getElementById('kpiDone').textContent = fmtInt(totalDoneRaw);
+  document.getElementById('kpiLeft').textContent = fmtInt(totalLeft);
+  document.getElementById('kpiValue').textContent = fmtMoney(totalValue);
+  document.getElementById('gaugePct').textContent = pct.toFixed(0) + '% complete';
+  document.getElementById('gemFill').setAttribute('y', 170 - (150 * pct/100));
+  document.getElementById('gemFill').setAttribute('height', 150 * pct/100);
+
+  // priority cards
+  const priorityScroll = document.getElementById('priorityScroll');
+  const owed = targets.filter(t => t.pcs - t.producedCount > 0).sort((a,b) => (b.pcs-b.producedCount) - (a.pcs-a.producedCount));
+  if (owed.length === 0) {
+    priorityScroll.innerHTML = '<div class="priority-empty">Every target line is fully produced. Nothing outstanding right now.</div>';
+  } else {
+    priorityScroll.innerHTML = owed.slice(0, 12).map(t => `
+      <div class="priority-card">
+        <div class="shape">${t.shapeRaw}</div>
+        <div class="size">${t.length && t.width ? t.length.toFixed(2)+' × '+t.width.toFixed(2)+' mm' : '—'}</div>
+        <div class="remaining">${fmtInt(t.pcs - t.producedCount)}</div>
+        <div class="remaining-lbl">pieces still owed</div>
+        <div class="specs">
+          <div>Ratio <b>${fmtNum(t.ratio,2)}</b></div>
+          <div>Height % <b>${t.heightPct!==null? (t.heightPct*100).toFixed(1)+'%':'—'}</b></div>
+          <div>Target wt <b>${fmtNum(t.singleWt,3)} ct</b></div>
+        </div>
+      </div>`).join('');
+  }
+
+  renderMainTable();
+  renderExtraTable();
+}
+
+let sortKey = 'left', sortDir = -1;
+function renderMainTable(filterText) {
+  const targets = state.targets;
+  filterText = (filterText || document.getElementById('searchBox').value || '').toLowerCase();
+  let rows = targets.map(t => {
+    const left = Math.max(0, t.pcs - t.producedCount);
+    const avgWt = t.weights.length ? t.weights.reduce((a,b)=>a+b,0)/t.weights.length : null;
+    const avgH = t.heightPcts.length ? t.heightPcts.reduce((a,b)=>a+b,0)/t.heightPcts.length : null;
+    const value = t.prices.reduce((a,b)=>a+b,0);
+    return { t, left, avgWt, avgH, value };
+  });
+  if (filterText) rows = rows.filter(r => r.t.shapeRaw.toLowerCase().includes(filterText));
+
+  rows.sort((a,b) => {
+    const map = {
+      shape: [a.t.shapeRaw, b.t.shapeRaw],
+      size: [(a.t.length||0), (b.t.length||0)],
+      target: [a.t.pcs, b.t.pcs],
+      done: [a.t.producedCount, b.t.producedCount],
+      left: [a.left, b.left],
+      avgwt: [a.avgWt||0, b.avgWt||0],
+      targetwt: [a.t.singleWt||0, b.t.singleWt||0],
+      height: [a.avgH||0, b.avgH||0],
+      value: [a.value, b.value]
+    };
+    const [av, bv] = map[sortKey] || map.left;
+    if (typeof av === 'string') return sortDir * av.localeCompare(bv);
+    return sortDir * (av - bv);
+  });
+
+  const tbody = document.getElementById('mainTableBody');
+  const emptyNote = document.getElementById('mainEmptyNote');
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    emptyNote.style.display = 'block';
+    emptyNote.textContent = 'No shapes match that filter.';
+    return;
+  }
+  emptyNote.style.display = 'none';
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const t = r.t;
+    const pctDone = t.pcs > 0 ? Math.min(100, (t.producedCount/t.pcs)*100) : 0;
+    const status = t.producedCount >= t.pcs && t.pcs > 0 ? 'done' : (t.producedCount === 0 ? 'notstarted' : 'progress');
+    const statusLabel = status === 'done' ? 'Complete' : (status === 'notstarted' ? 'Not started' : 'In progress');
+    const detailId = 'detail-' + t.id;
+    const multiFile = state.prodFiles.length > 1;
+    const detailRows = t.pieces.length ? t.pieces.map(p => `
+      <tr><td>${p.roughId || '—'}</td><td>${p.clarity||'—'}</td><td>${p.color||'—'}</td><td class="num">${p.weight!==null?p.weight.toFixed(3):'—'}</td><td class="num">${p.price!==null?'$'+p.price.toFixed(0):'—'}</td>${multiFile ? `<td class="size-cell">${p.sourceFile||'—'}</td>` : ''}</tr>
+    `).join('') : `<tr><td colspan="${multiFile?6:5}" style="text-align:center;">No individual piece records captured.</td></tr>`;
+    return `
+      <tr class="rowmain" data-detail="${detailId}">
+        <td class="shape-cell">${t.shapeRaw} <span class="badge ${status}" style="margin-left:6px;">${statusLabel}</span></td>
+        <td class="size-cell">${t.length && t.width ? t.length.toFixed(2)+' × '+t.width.toFixed(2) : '—'}</td>
+        <td class="num">${fmtInt(t.pcs)}</td>
+        <td class="num">${fmtInt(t.producedCount)}</td>
+        <td class="num">${fmtInt(Math.max(0,t.pcs-t.producedCount))}</td>
+        <td style="min-width:110px;"><div class="bar-track"><div class="bar-fill ${status==='done'?'done':''}" style="width:${pctDone}%;"></div></div><div class="pct-txt">${pctDone.toFixed(0)}%</div></td>
+        <td class="num">${fmtNum(r.avgWt,3)}</td>
+        <td class="num">${fmtNum(t.singleWt,3)}</td>
+        <td class="num">${r.avgH!==null ? (r.avgH*100).toFixed(1)+'%' : '—'}</td>
+        <td class="num">${fmtMoney(r.value)}</td>
+      </tr>
+      <tr class="detail-row" id="${detailId}" style="display:none;">
+        <td colspan="10">
+          <div class="detail-inner">
+            <table>
+              <thead><tr><th>Rough ID</th><th>Clarity</th><th>Color</th><th class="num">Weight (ct)</th><th class="num">Price</th>${multiFile ? '<th>Source file</th>' : ''}</tr></thead>
+              <tbody>${detailRows}</tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('tr.rowmain').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const id = tr.getAttribute('data-detail');
+      const detail = document.getElementById(id);
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'table-row';
+      tr.classList.toggle('open', !open);
+    });
+  });
+}
+
+function renderExtraTable() {
+  const extras = Object.values(state.extras).sort((a,b) => b.count - a.count);
+  const tbody = document.getElementById('extraTableBody');
+  const emptyNote = document.getElementById('extraEmptyNote');
+  if (extras.length === 0) {
+    tbody.innerHTML = '';
+    emptyNote.style.display = 'block';
+    emptyNote.textContent = 'No extra or by-product pieces detected — all selected cuts matched a target line.';
+    return;
+  }
+  emptyNote.style.display = 'none';
+  tbody.innerHTML = extras.map(e => `
+    <tr>
+      <td class="shape-cell">${e.shape}</td>
+      <td class="size-cell">${e.length && e.width ? e.length.toFixed(2)+' × '+e.width.toFixed(2)+' mm' : '—'}</td>
+      <td class="num">${fmtInt(e.count)}</td>
+      <td class="num">${e.totalWt.toFixed(3)}</td>
+      <td class="num">${fmtMoney(e.totalValue)}</td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('searchBox').addEventListener('input', () => renderMainTable());
+document.querySelectorAll('#mainTable thead th').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.getAttribute('data-key');
+    if (!key) return;
+    if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+    document.querySelectorAll('#mainTable thead th').forEach(t => t.classList.remove('active'));
+    th.classList.add('active');
+    renderMainTable();
+  });
+});
+</script>
+</body>
+</html>
